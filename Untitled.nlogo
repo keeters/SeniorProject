@@ -1,44 +1,180 @@
 ; Felix Velez & Silas Keeter
 ; Senior Project
 
+globals [
+
+  click-once? ;limit interactions to a single click
+  game-end?
+
+  ai-choice-tick
+]
+
+breed [ circles circle ]
+breed [ squares square ]
+breed [ triangles triangle ]
+
+turtles-own [
+ health
+]
 
 to setup
   clear-all
 
+  set click-once? false
+  set game-end? false
   setup-patches
+  set ai-choice-tick 0
 
 end
 
+;;;;;REMEMBER ODD LENGTH BOARD FOR MIDDLE LINE!!!!!
 to setup-patches
+  ask patches [
+    if pycor > 0 or pycor < 0 [set pcolor green]
+    if pycor = max-pycor [set pcolor red]
+    if pycor = (max-pycor * -1) [set pcolor blue]
 
-end
-
-to mouse-click
-  if mouse-down? [
-   make-shape
   ]
 end
 
-to make-shape
-  crt 1
+to run-game
+  if not game-end?[
+
+    if ai-choice-tick = 50 [
+      ai-action
+
+      set ai-choice-tick 0
+    ]
+
+    if mouse-down? and click-once? = false[
+
+      make-shape-player
+      set click-once? true
+    ]
+
+    if not mouse-down? [
+      set click-once? false
+    ]
+
+    ask turtles [fd 0.05]
+
+    handle-fight
+
+    handle-collisions
+
+    winner?
+
+    set ai-choice-tick (ai-choice-tick + 1)
+  ]
+  wait 0.005
+
+end
+
+to ai-action
+  ai-spawns-shape
+end
+
+to ai-spawns-shape
+  crt 1 [
+    let pos-neg random-float 1
+
+    setxy (random max-pxcor - 1) (random max-pycor - 1)
+    if pos-neg > 0.5 [ set xcor (xcor * -1)]
+    set color red
+    set shape "triangle"
+
+    face min-one-of patches with [pcolor = blue] [distance myself]
+  ]
+end
+
+to handle-fight
+  ask turtles [
+    if any? turtles with [color != [color] of myself] in-radius 4 [
+      face min-one-of turtles with [color != [color] of myself] [distance myself]
+    ]
+
+    if not any? turtles with [color != [color] of myself] in-radius 4 [
+
+      ;OOOOOOFFFF CLEAN THIS LINE UP!!! Supposed to have blue and red agents go to enemy barrier after a fight finishes
+      face min-one-of patches with [pcolor != green and pcolor != black and pcolor != grey and pcolor != [color] of myself] [distance myself]
+    ]
+  ]
+
+end
+
+;checks if any win conditions are met
+to winner?
+  if not any? patches with [pcolor = red] [
+    set game-end? true
+
+    ask patch 5 -3 [set plabel "Player wins!!!" set plabel-color white]
+
+    stop
+  ]
+
+  if not any? patches with [pcolor = blue] [
+    set game-end? true
+
+    ask patch 9 3 [set plabel "You lost to an AI! Git gud!" set plabel-color white]
+
+    stop
+  ]
+end
+
+to make-shape-player
+  if mouse-ycor <= -1 [
+    crt 1 [
+      setxy mouse-xcor mouse-ycor
+      set color blue
+      if Shape-Spawn = "circle" [set shape "circle"]
+      if Shape-Spawn = "triangle" [set shape "triangle"]
+      if Shape-Spawn = "square" [set shape "square"]
+
+      face min-one-of patches with [pcolor = red] [distance myself]
+    ]
+  ]
+end
+
+
+to handle-collisions
+  ask turtles [
+    ;Handles turtles coming in contact with base
+    ;if [pcolor] of patch-here = grey [die]
+
+    if [pcolor] of patch-here = red and color = blue [
+      set pcolor grey
+      die
+    ]
+    if [pcolor] of patch-here = blue and color = red [
+      set pcolor grey
+      die
+    ]
+
+    ;handle trutles coming in contact with each other
+    if any? turtles with [color != [color] of myself] in-radius 0.5 [
+      ask turtles with [color != [color] of myself] in-radius 0.5 [die]
+      die
+    ]
+  ]
+  ;what happens when turtles fight?
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-210
-10
-647
-448
+515
+23
+952
+461
 -1
 -1
 13.0
 1
-10
+24
 1
 1
 1
 0
-1
-1
+0
+0
 1
 -16
 16
@@ -49,6 +185,60 @@ GRAPHICS-WINDOW
 1
 ticks
 30.0
+
+BUTTON
+8
+29
+71
+62
+NIL
+setup
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+9
+100
+94
+133
+NIL
+run-game
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+CHOOSER
+15
+202
+153
+247
+Shape-Spawn
+Shape-Spawn
+"circle" "triangle" "square"
+1
+
+CHOOSER
+948
+103
+1119
+148
+Difficulty
+Difficulty
+"Easy" "Normal" "Robots are learning..."
+0
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -331,7 +521,7 @@ Circle -7500403 true true 45 90 120
 Circle -7500403 true true 104 74 152
 
 triangle
-false
+true
 0
 Polygon -7500403 true true 150 30 15 255 285 255
 
