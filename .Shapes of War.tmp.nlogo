@@ -158,7 +158,7 @@ end
 to spawn-circle [x y col group]
   ;move slow while spawning squares, can be killed by one triangle
   create-circles 1 [
-    set shape "circle 2"
+    set shape "circle "
     set color col
     set team group
     setxy x y
