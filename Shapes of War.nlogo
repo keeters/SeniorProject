@@ -7,6 +7,14 @@ globals [
   game-end?
 
   ai-choice-tick
+
+  player
+  player-xcor
+  player-ycor
+
+  opponent
+  opponent-xcor
+  opponent-ycor
 ]
 
 breed [ circles circle ]
@@ -18,6 +26,15 @@ turtles-own [
   team
 ]
 
+triangles-own [
+  fighting?
+  distracted?
+]
+
+circles-own [
+ birth
+]
+
 to setup
   clear-all
 
@@ -25,6 +42,24 @@ to setup
   set game-end? false
   setup-patches
   set ai-choice-tick 0
+
+  crt 1 [
+    set color white
+    set shape "crosshair"
+    set size 1.2
+    set player-xcor 0
+    set player-ycor ( round (max-pycor / 2 * -1))
+    setxy player-xcor player-ycor
+    set player self
+  ]
+
+  crt 1 [
+    set color white
+    set shape "crosshair"
+    set size 1.2
+    setxy 0 ( round (max-pycor / 2))
+    set opponent self
+  ]
 
 end
 
@@ -34,7 +69,6 @@ to setup-patches
     if pycor > 0 or pycor < 0 [set pcolor green]
     if pycor = max-pycor [set pcolor red]
     if pycor = (max-pycor * -1) [set pcolor blue]
-
   ]
 end
 
@@ -51,7 +85,6 @@ to run-game
 
     if mouse-down? and click-once? = false[
 
-      make-shape-player
       set click-once? true
     ]
 
@@ -59,10 +92,22 @@ to run-game
       set click-once? false
     ]
 
-    ask triangles [fd 0.02]
+    ;;if not distracted by a circle, move forward
+    ask triangles [
+      if not any? circles with [team != [team] of myself] in-radius 1 [ fd 0.02]
+    ]
+
+    ;;update circle behavior and lifespan
+    ask circles [
+      set color (color - 0.002)
+      set health (health - 1)
+      set label (round (timer - birth))
+      if health <= 0 [die]
+      if not any? triangles with [team != [team] of myself] in-radius 1 [ fd 0.002]
+    ]
 
     handle-fight
-
+    handle-decoys
     handle-collisions
 
     winner?
@@ -79,37 +124,7 @@ end
 
 ;enemy spawns a shaoe of their choice. right now it's just triangles.
 to enemy-spawns-shape
-  create-triangles 1 [
-    let pos-neg random-float 1
-
-    ;maybe not having negative xy values would make things easier long-term?
-    setxy (random max-pxcor - 1) ((random (max-pycor - 2)) + 2)
-    if pos-neg > 0.5 [ set xcor (xcor * -1)]
-    set color red
-    set shape "triangle"
-
-    face min-one-of patches with [pcolor = blue] [distance myself]
-  ]
-end
-
-to handle-fight
-  ask triangles [
-    if any? triangles with [color != [color] of myself] in-radius 4 [
-      face min-one-of triangles with [color != [color] of myself] [distance myself]
-    ]
-
-    if not any? triangles with [color != [color] of myself] in-radius 4 [
-
-      ;after a fight, triangle forces will continue traveling to enemy wall
-      ifelse color = blue [
-        face min-one-of patches with [pcolor = red] [distance myself]
-      ][
-        face min-one-of patches with [pcolor = blue] [distance myself]
-      ]
-      ;face min-one-of patches with [pcolor != green and pcolor != black and pcolor != grey and pcolor != [color] of myself] [distance myself]
-    ]
-  ]
-
+  ask opponent [spawn-triangle opponent-xcor opponent-ycor red "opponent"]
 end
 
 ;checks if any win conditions are met
@@ -117,7 +132,7 @@ to winner?
   if not any? patches with [pcolor = red] [
     set game-end? true
 
-    ask patch 5 -3 [set plabel "Player wins!!!" set plabel-color white]
+    ask patch 3 -3 [set plabel "Player wins!!!" set plabel-color white]
 
     stop
   ]
@@ -125,66 +140,137 @@ to winner?
   if not any? patches with [pcolor = blue] [
     set game-end? true
 
-    ask patch 9 3 [set plabel "You lost to an AI! Git gud!" set plabel-color white]
+    ask patch 5 3 [set plabel "You lost to an AI! Git gud!" set plabel-color white]
 
     stop
   ]
 end
 
-to make-shape-player
-  if mouse-ycor < -1 [
 
-    ;set up fixed integer coordinates instead of float values
-    let x round mouse-xcor
-    let y round mouse-ycor
-
-    ;checks if there is not a turtle already occupying a patch
-    let free 0
-    ask patch x y [if not any? turtles-here [set free 1]]
-
-    ;call functions to create each shape if possible
-    if free = 1[
-      if Shape-spawn = "circle" [spawn-circle x y 105 "player"] ; 105 = "blue"
-      if Shape-Spawn = "triangle" [spawn-triangle x y 105 "player"]
-      if Shape-Spawn = "square" [spawn-square x y 105 "player"]
-    ]
-  ]
-end
-
-
-; x y are coordinates, col is used to set the color of the unit
+;to make-shape-player
+;  if mouse-ycor < -1 [
+;
+;    ;set up fixed integer coordinates instead of float values
+;    let x [xcor] of player
+;    let y [ycor] of player
+;
+;    ;checks if there is not a turtle already occupying a patch
+;    let free 0
+;    ask patch x y [if (not any? triangles-here) and (not any? circles-here) and (not any? squares-here) [set free 1]]
+;
+;    ;call functions to create each shape if possible
+;    if free = 1[
+;      if Shape-spawn = "circle" [spawn-circle x y 105 "player"] ; 105 = "blue"
+;      if Shape-Spawn = "triangle" [spawn-triangle x y 105 "player"]
+;      if Shape-Spawn = "square" [spawn-square x y 105 "player"]
+;    ]
+;  ]
+;end
 
 
+; col is used to set the color of the unit, group is which team the unit is a part of
 to spawn-circle [x y col group]
-  ;move slow while spawning squares, can be killed by one triangle
-  create-circles 1 [
-    set shape "circle 2"
+  hatch-circles 1 [
+    set shape "circle"
+    set size 1.5
     set color col
     set team group
-    setxy x y
+    if color = blue [set heading 0]
+    if color = red [set heading 180]
+    set health 2000
+    set birth timer
   ]
+
 end
 
 to spawn-triangle [x y col group]
-  create-triangles 1 [
+  hatch-triangles 1 [
     set shape "triangle"
+    set size 1
     set color col
     set team group
-    setxy x y
     set health 2
+    set fighting? false
+    set distracted? false
   ]
+
 end
 
 to spawn-square [x y col group]
-  create-squares 1 [
+  hatch-squares 1 [
     set shape "square"
+    set size 1
     set color col
     set team group
-    setxy x y
     set health 3
   ]
+
 end
 
+
+;;turtle-context, called by player
+to player-moves-right
+  if xcor != max-pxcor [
+    set xcor (xcor + 1)
+    set player-xcor xcor
+  ]
+
+end
+
+to player-moves-left
+  if xcor != (max-pxcor * -1) [
+    set xcor (xcor - 1)
+    set player-xcor xcor
+  ]
+
+end
+
+to player-moves-up
+  if ycor < -1 [
+    set ycor (ycor + 1)
+    set player-ycor ycor
+  ]
+
+end
+
+to player-moves-down
+  if ycor != ((max-pycor - 1) * -1) [
+    set ycor (ycor - 1)
+    set player-ycor ycor
+  ]
+
+end
+
+
+to handle-fight
+  ask triangles [
+    if (not distracted?) and (any? triangles with [color != [color] of myself] in-radius 4) [
+      face min-one-of triangles with [color != [color] of myself] [distance myself]
+      set fighting? true
+    ]
+
+    if (not distracted?) and (not any? triangles with [color != [color] of myself] in-radius 4) [
+      set fighting? false
+      ;after a fight, triangle forces will continue traveling to enemy wall
+      ifelse color = blue [
+        face min-one-of patches with [pcolor = red] [distance myself]
+      ][
+        face min-one-of patches with [pcolor = blue] [distance myself]
+      ]
+    ]
+  ]
+
+end
+
+to handle-decoys
+  ask triangles[
+    if any? circles with [team != [team] of myself] [
+      set distracted? true
+      face min-one-of circles with [team != [team] of myself] [distance myself]
+    ]
+  ]
+
+end
 
 to handle-collisions
   ask triangles [
@@ -222,11 +308,11 @@ end
 GRAPHICS-WINDOW
 202
 23
-660
-410
+618
+344
 -1
 -1
-18.0
+24.0
 1
 24
 1
@@ -236,10 +322,10 @@ GRAPHICS-WINDOW
 0
 0
 1
--12
-12
--10
-10
+-8
+8
+-6
+6
 0
 0
 1
@@ -264,10 +350,10 @@ NIL
 1
 
 BUTTON
-9
-100
-94
-133
+84
+30
+169
+63
 NIL
 run-game
 T
@@ -281,14 +367,14 @@ NIL
 1
 
 CHOOSER
-15
-202
-153
-247
+9
+74
+147
+119
 Shape-Spawn
 Shape-Spawn
 "circle" "triangle" "square"
-1
+2
 
 CHOOSER
 678
@@ -299,6 +385,125 @@ Difficulty
 Difficulty
 "Easy" "Normal" "Robots are learning..."
 0
+
+BUTTON
+68
+142
+123
+175
+Up
+ask player [player-moves-up]
+NIL
+1
+T
+OBSERVER
+NIL
+I
+NIL
+NIL
+1
+
+BUTTON
+68
+175
+123
+208
+Down
+ask player [player-moves-down]
+NIL
+1
+T
+OBSERVER
+NIL
+K
+NIL
+NIL
+1
+
+BUTTON
+123
+175
+178
+208
+Right
+ask player [player-moves-right]
+NIL
+1
+T
+OBSERVER
+NIL
+L
+NIL
+NIL
+1
+
+BUTTON
+13
+175
+68
+208
+Left
+ask player [player-moves-left]
+NIL
+1
+T
+OBSERVER
+NIL
+J
+NIL
+NIL
+1
+
+BUTTON
+13
+226
+68
+259
+Square
+ask player [\nif not any? other turtles-here[\nspawn-square player-xcor player-ycor 105 \"player\"\n]\n]
+NIL
+1
+T
+OBSERVER
+NIL
+Q
+NIL
+NIL
+1
+
+BUTTON
+68
+226
+123
+259
+Triangle
+ask player [\nif not any? other turtles-here[\nspawn-triangle player-xcor player-ycor 105 \"player\"\n]\n]
+NIL
+1
+T
+OBSERVER
+NIL
+W
+NIL
+NIL
+1
+
+BUTTON
+123
+226
+178
+259
+Circle
+ask player [\nif not any? other turtles-here[\nspawn-circle player-xcor player-ycor 105 \"player\"\n]\n]
+NIL
+1
+T
+OBSERVER
+NIL
+E
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -410,6 +615,18 @@ false
 Polygon -7500403 true true 200 193 197 249 179 249 177 196 166 187 140 189 93 191 78 179 72 211 49 209 48 181 37 149 25 120 25 89 45 72 103 84 179 75 198 76 252 64 272 81 293 103 285 121 255 121 242 118 224 167
 Polygon -7500403 true true 73 210 86 251 62 249 48 208
 Polygon -7500403 true true 25 114 16 195 9 204 23 213 25 200 39 123
+
+crosshair
+false
+0
+Rectangle -7500403 true true 30 30 60 120
+Rectangle -7500403 true true 240 30 270 120
+Rectangle -7500403 true true 60 30 120 60
+Rectangle -7500403 true true 240 180 270 270
+Rectangle -7500403 true true 30 180 60 270
+Rectangle -7500403 true true 180 30 240 60
+Rectangle -7500403 true true 180 240 240 270
+Rectangle -7500403 true true 60 240 120 270
 
 cylinder
 false
