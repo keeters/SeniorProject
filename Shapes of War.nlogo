@@ -3,7 +3,6 @@
 
 globals [
 
-  click-once? ;limit interactions to a single click
   game-end?
 
   ai-choice-tick
@@ -38,7 +37,6 @@ circles-own [
 to setup
   clear-all
 
-  set click-once? false
   set game-end? false
   setup-patches
   set ai-choice-tick 0
@@ -81,15 +79,6 @@ to run-game
       enemy-action
 
       set ai-choice-tick 0
-    ]
-
-    if mouse-down? and click-once? = false[
-
-      set click-once? true
-    ]
-
-    if not mouse-down? [
-      set click-once? false
     ]
 
     ;;if not distracted by a circle, move forward
@@ -145,27 +134,6 @@ to winner?
     stop
   ]
 end
-
-
-;to make-shape-player
-;  if mouse-ycor < -1 [
-;
-;    ;set up fixed integer coordinates instead of float values
-;    let x [xcor] of player
-;    let y [ycor] of player
-;
-;    ;checks if there is not a turtle already occupying a patch
-;    let free 0
-;    ask patch x y [if (not any? triangles-here) and (not any? circles-here) and (not any? squares-here) [set free 1]]
-;
-;    ;call functions to create each shape if possible
-;    if free = 1[
-;      if Shape-spawn = "circle" [spawn-circle x y 105 "player"] ; 105 = "blue"
-;      if Shape-Spawn = "triangle" [spawn-triangle x y 105 "player"]
-;      if Shape-Spawn = "square" [spawn-square x y 105 "player"]
-;    ]
-;  ]
-;end
 
 
 ; col is used to set the color of the unit, group is which team the unit is a part of
@@ -381,8 +349,8 @@ CHOOSER
 30
 849
 75
-Difficulty
-Difficulty
+GameMode
+GameMode
 "Easy" "Normal" "Robots are learning..."
 0
 
