@@ -5,15 +5,12 @@ globals [
 
   game-end?
 
-  ai-choice-tick
+  ai-action-tick
 
   player
-  player-xcor
-  player-ycor
 
   opponent
-  opponent-xcor
-  opponent-ycor
+
 ]
 
 breed [ circles circle ]
@@ -23,6 +20,9 @@ breed [ triangles triangle ]
 turtles-own [
   health
   team
+  triangle-cooldown
+  square-cooldown
+  circle-cooldown
 ]
 
 triangles-own [
@@ -39,16 +39,21 @@ to setup
 
   set game-end? false
   setup-patches
-  set ai-choice-tick 0
+  set ai-action-tick 0
+  reset-ticks
 
   crt 1 [
     set color white
     set shape "crosshair"
     set size 1.2
-    set player-xcor 0
-    set player-ycor ( round (max-pycor / 2 * -1))
-    setxy player-xcor player-ycor
+    setxy 0 ( (round (max-pycor / 2)) * -1)
+
     set player self
+    set team "player"
+
+    set triangle-cooldown 100
+    set square-cooldown 500
+    set circle-cooldown 2000
   ]
 
   crt 1 [
@@ -57,6 +62,11 @@ to setup
     set size 1.2
     setxy 0 ( round (max-pycor / 2))
     set opponent self
+    set team "opponent"
+
+    set triangle-cooldown 100
+    set square-cooldown 500
+    set circle-cooldown 2000
   ]
 
 end
@@ -73,55 +83,91 @@ end
 
 
 to run-game
+  tick-advance 1
   if not game-end?[
 
-    if ai-choice-tick = 200 [
-      enemy-action
+    if ai-action-tick = 50 [
+      ask opponent [enemy-action]
 
-      set ai-choice-tick 0
+      set ai-action-tick 0
     ]
 
     ;;if not distracted by a circle, move forward
     ask triangles [
-      if not any? circles with [team != [team] of myself] in-radius 1 [ fd 0.02]
+      if (not any? triangles with [team != [team] of myself] in-radius 0.75)
+      and (not any? squares with [team != [team] of myself] in-radius 0.75)
+      and (not any? circles with [team != [team] of myself] in-radius 0.75)
+      [ fd 0.01]
     ]
 
     ;;update circle behavior and lifespan
-    ask circles [
-      set color (color - 0.002)
-      set health (health - 1)
-      set label (round (timer - birth))
-      if health <= 0 [die]
-      if not any? triangles with [team != [team] of myself] in-radius 1 [ fd 0.002]
-    ]
 
-    handle-fight
     handle-decoys
+    handle-fight
     handle-collisions
 
     winner?
 
-    set ai-choice-tick (ai-choice-tick + 1)
+    set ai-action-tick (ai-action-tick + 1)
   ]
   wait 0.005
 
 end
 
+
+;;WORK ON THIS AI MOVEMENT
 to enemy-action
-  enemy-spawns-shape
+
+  if Opponent-Mode = "Random" [
+   enemy-random
+  ]
+
 end
 
-;enemy spawns a shaoe of their choice. right now it's just triangles.
-to enemy-spawns-shape
-  ask opponent [spawn-triangle opponent-xcor opponent-ycor red "opponent"]
+;;;Opponent makes random moves
+to enemy-random
+  let rand (random-float 1)
+  if rand < 0.4 [
+
+    let rand-move (random-float 1)
+
+    ;random movements
+    ifelse rand-move < 0.25 [
+      if ycor < (max-pycor - 1) [
+        move-up
+      ]
+    ][
+      ifelse rand-move < 0.5 [
+        if ycor > 1 [
+          move-down
+        ]
+      ][
+        ifelse rand-move < 0.75 [
+          move-right
+        ][
+          move-left
+        ]
+
+      ]
+
+    ]
+
+  ]
+
+  ;currently only spawns triangles
+  let rand-spawn (random-float 1)
+  if rand-spawn < 0.25 [
+    spawn-triangle red "opponent"
+  ]
 end
+
 
 ;checks if any win conditions are met
 to winner?
   if not any? patches with [pcolor = red] [
     set game-end? true
 
-    ask patch 3 -3 [set plabel "Player wins!!!" set plabel-color white]
+    ask patch 3 -3 [set plabel "You win!!!" set plabel-color white]
 
     stop
   ]
@@ -136,8 +182,10 @@ to winner?
 end
 
 
+
+
 ; col is used to set the color of the unit, group is which team the unit is a part of
-to spawn-circle [x y col group]
+to spawn-circle [col group]
   hatch-circles 1 [
     set shape "circle"
     set size 1.5
@@ -145,79 +193,69 @@ to spawn-circle [x y col group]
     set team group
     if color = blue [set heading 0]
     if color = red [set heading 180]
-    set health 2000
+    set health 1500
     set birth timer
   ]
 
 end
 
-to spawn-triangle [x y col group]
+to spawn-triangle [col group]
   hatch-triangles 1 [
     set shape "triangle"
     set size 1
     set color col
     set team group
-    set health 2
+    set health 200
     set fighting? false
     set distracted? false
   ]
 
 end
 
-to spawn-square [x y col group]
+to spawn-square [col group]
   hatch-squares 1 [
     set shape "square"
     set size 1
     set color col
     set team group
-    set health 3
+    set health 2000
   ]
 
 end
 
 
-;;turtle-context, called by player
-to player-moves-right
+;;turtle-context, called by player and opponent
+to move-right
   if xcor != max-pxcor [
     set xcor (xcor + 1)
-    set player-xcor xcor
   ]
 
 end
 
-to player-moves-left
+to move-left
   if xcor != (max-pxcor * -1) [
     set xcor (xcor - 1)
-    set player-xcor xcor
   ]
 
 end
 
-to player-moves-up
-  if ycor < -1 [
+to move-up
     set ycor (ycor + 1)
-    set player-ycor ycor
-  ]
-
 end
 
-to player-moves-down
-  if ycor != ((max-pycor - 1) * -1) [
+to move-down
     set ycor (ycor - 1)
-    set player-ycor ycor
-  ]
-
 end
 
 
 to handle-fight
   ask triangles [
-    if (not distracted?) and (any? triangles with [color != [color] of myself] in-radius 4) [
+    if (not distracted?) and (any? triangles with [color != [color] of myself] in-radius 3) [
       face min-one-of triangles with [color != [color] of myself] [distance myself]
       set fighting? true
     ]
 
-    if (not distracted?) and (not any? triangles with [color != [color] of myself] in-radius 4) [
+    if (not distracted?) and (not any? triangles with [color != [color] of myself] in-radius 3) [
       set fighting? false
       ;after a fight, triangle forces will continue traveling to enemy wall
       ifelse color = blue [
@@ -231,12 +269,33 @@ to handle-fight
 end
 
 to handle-decoys
+  ask circles [
+      set color (color - 0.002)
+      set health (health - 1)
+      set label (word (round (health / 100)))
+      if not any? triangles with [team != [team] of myself] in-radius 1 [ fd 0.002]
+
+      if health <= 0 [
+        ask triangles with [distracted? = true] in-radius 3 [
+        set distracted? false
+          ifelse color = blue [
+            face min-one-of patches with [pcolor = red] [distance myself]
+          ][
+            face min-one-of patches with [pcolor = blue] [distance myself]
+          ]
+        ]
+        die
+      ]
+    ]
+
+
   ask triangles[
-    if any? circles with [team != [team] of myself] [
+    if any? circles with [team != [team] of myself] in-radius 3 [
       set distracted? true
       face min-one-of circles with [team != [team] of myself] [distance myself]
     ]
   ]
+
 
 end
 
@@ -254,20 +313,29 @@ to handle-collisions
       die
     ]
 
-    ;handle turtles coming in contact with one from the other team
-    if any? triangles with [color != [color] of myself] in-radius 0.5 [
-      ;triangles will die
-      ask triangles with [color != [color] of myself] in-radius 0.5 [die]
-      die
-    ]
-    if any? squares with [color != [color] of myself] in-radius 0.5 [
-     ask squares with [team != [team] of myself] in-radius 0.5 [
+    ;ask distracted triangles to die if an enemy triangle comes to fight them
+    ask triangles with [distracted? = true] [
+      if any? triangles with [color != [color] of myself] in-radius 0.75 [
         set health (health - 1)
-        set color (color - 1.5)
+      ]
+      if health <= 0 [die]
+    ]
+
+    ;handle turtles coming in contact with one from the other team
+    if any? triangles with [color != [color] of myself] in-radius 0.75 [
+      ;triangles will die
+      ask one-of triangles with [color != [color] of myself] in-radius 0.75 [set health (health - 1)]
+
+      set health (health - 1)
+      if health <= 0 [die]
+    ]
+    if any? squares with [color != [color] of myself] in-radius 0.75 [
+     ask squares with [team != [team] of myself] in-radius 0.75 [
+        set health (health - 1)
+        set color (color - (3 / 1500))
         ;also darken color to show it weakening?
         if health <= 0 [die]
       ]
-      die
     ]
   ]
   ;what happens when turtles fight?
@@ -335,32 +403,22 @@ NIL
 1
 
 CHOOSER
-9
-74
-147
-119
-Shape-Spawn
-Shape-Spawn
-"circle" "triangle" "square"
-2
-
-CHOOSER
 678
 30
 849
 75
-GameMode
-GameMode
-"Easy" "Normal" "Robots are learning..."
+Opponent-Mode
+Opponent-Mode
+"Random" "Set Pattern" "Reactive"
 0
 
 BUTTON
-68
-142
-123
-175
+73
+80
+128
+113
 Up
-ask player [player-moves-up]
+ask player [\nif ycor < -1 [\nmove-up\n]\n]
 NIL
 1
 T
@@ -372,12 +430,12 @@ NIL
 1
 
 BUTTON
-68
-175
-123
-208
+73
+113
+128
+146
 Down
-ask player [player-moves-down]
+ask player [\nif abs ycor < (max-pycor - 1) [\nmove-down\n]\n]
 NIL
 1
 T
@@ -389,12 +447,12 @@ NIL
 1
 
 BUTTON
-123
-175
-178
-208
+128
+113
+183
+146
 Right
-ask player [player-moves-right]
+ask player [\nmove-right\n]
 NIL
 1
 T
@@ -406,12 +464,12 @@ NIL
 1
 
 BUTTON
-13
-175
-68
-208
+18
+113
+73
+146
 Left
-ask player [player-moves-left]
+ask player [\nmove-left\n]
 NIL
 1
 T
@@ -423,12 +481,12 @@ NIL
 1
 
 BUTTON
-13
-226
-68
-259
+18
+164
+73
+197
 Square
-ask player [\nif not any? other turtles-here[\nspawn-square player-xcor player-ycor 105 \"player\"\n]\n]
+ask player [\nif not any? other turtles-here[\nspawn-square 105 \"player\"\n]\n]
 NIL
 1
 T
@@ -440,12 +498,12 @@ NIL
 1
 
 BUTTON
-68
-226
-123
-259
+73
+164
+128
+197
 Triangle
-ask player [\nif not any? other turtles-here[\nspawn-triangle player-xcor player-ycor 105 \"player\"\n]\n]
+ask player [\nif not any? other turtles-here[\nspawn-triangle 105 \"player\"\n]\n]
 NIL
 1
 T
@@ -457,12 +515,12 @@ NIL
 1
 
 BUTTON
-123
-226
-178
-259
+128
+164
+183
+197
 Circle
-ask player [\nif not any? other turtles-here[\nspawn-circle player-xcor player-ycor 105 \"player\"\n]\n]
+ask player [\nif not any? other turtles-here[\nspawn-circle 105 \"player\"\n]\n]
 NIL
 1
 T
