@@ -1,0 +1,11 @@
+README
+
+By Silas Keeter and Felix Velez
+
+Netlogo
+There are two Netlogo models.  One is the regular Shapes of War game and the other is Shapes of War Simplified. In Shapes of War Simplified, there are only triangles produced.
+
+Java
+The java library was primarily taken from Hydrozoa at: 
+https://www.mediafire.com/file/b04v0id95026gtv/hydroneat_debugging_video.zip/file
+The IntegerList class is the primary class that should be run.  Edits were performed on the Neural Net class as well as the evaluator class.  The program should be run with a jar connection to the Netlogo jar file.  Netlogo Shapes of War Simplified should be in the same folder so it is available for use.
